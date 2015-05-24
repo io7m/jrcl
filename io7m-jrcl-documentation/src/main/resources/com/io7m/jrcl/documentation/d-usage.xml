@@ -1,0 +1,180 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--
+  Copyright © 2015 <code@io7m.com> http://io7m.com
+
+  Permission to use, copy, modify, and/or distribute this software for any
+  purpose with or without fee is hereby granted, provided that the above
+  copyright notice and this permission notice appear in all copies.
+
+  THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+  WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+  MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+  ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+  WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+  ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+  OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+  -->
+
+<s:part xmlns:s="http://schemas.io7m.com/structural/2.1.0">
+  <s:part-title>Usage</s:part-title>
+  <s:part-contents />
+
+  <s:section>
+    <s:section-title>Usage</s:section-title>
+    <s:subsection>
+      <s:subsection-title>Overview</s:subsection-title>
+      <s:paragraph>
+        The <s:term s:type="package">${project.parent.name}</s:term>
+        package is based around the
+        <s:link-external s:target="apidocs/com/io7m/jrcl/core/JRClassLoader.html">JRClassLoader</s:link-external>
+        and
+        <s:link-external s:target="apidocs/com/io7m/jrcl/core/JRClassLoaderPolicyType.html">JRClassLoaderPolicyType</s:link-external>
+        types. The <s:term s:type="type">JRClassLoader</s:term> type
+        implements a class loader that applies a security policy, and
+        implementations of the 
+        <s:term s:type="type">JRClassLoaderPolicyType</s:term> type
+        provide that policy. At a basic level, a restricted class
+        loader consults a policy before attempting to load a class
+        or resource. The intention is to assist in the creation of
+        simple 
+        <s:link-external s:target="https://en.wikipedia.org/wiki/Sandbox_(computer_security)">sandboxes</s:link-external>
+        by denying access to classes by sandboxed code. The package
+        is intended to be used in combination with custom Java
+        <s:link-external s:target="http://docs.oracle.com/javase/8/docs/api/java/lang/SecurityManager.html">security policies</s:link-external>.
+      </s:paragraph>
+      <s:paragraph>
+        The following example uses the default system class loader,
+        but prevents the loading of all classes and resources except 
+        for the <s:term s:type="type">java.lang.Object</s:term> class:
+      </s:paragraph>
+      <s:formal-item s:kind="example">
+        <s:formal-item-title>Denial</s:formal-item-title>
+        <s:verbatim><![CDATA[
+import com.io7m.jrcl.core.JRClassLoader;
+import com.io7m.jrcl.core.JRClassLoaderPolicyType;
+
+public final class Denial
+{
+  public static void main(
+    final String args[])
+    throws Exception
+  {
+    final ClassLoader cl = ClassLoader.getSystemClassLoader();
+
+    /**
+     * A policy that denies everything except <tt>java.lang.Object</tt>.
+     */
+
+    final JRClassLoaderPolicyType policy = new JRClassLoaderPolicyType() {
+      @Override public boolean policyAllowsResource(
+        final String name)
+      {
+        return false;
+      }
+
+      @Override public boolean policyAllowsClass(
+        final String name)
+      {
+        return "java.lang.Object".equals(name);
+      }
+    };
+
+    final JRClassLoader rcl =
+      JRClassLoader.getRestrictedClassLoader(cl, policy);
+
+    /**
+     * Permitted
+     */
+
+    rcl.loadClass("java.lang.Object");
+
+    /**
+     * Not permitted
+     */
+
+    try {
+      rcl.loadClass("java.lang.Integer");
+    } catch (final SecurityException e) {
+      System.err.println(e.getMessage());
+    }
+  }
+}
+]]></s:verbatim>
+      </s:formal-item>
+    </s:subsection>
+
+    <s:subsection>
+      <s:subsection-title>Class Firewall</s:subsection-title>
+      <s:paragraph>
+        The package also provides a sequential rule-based policy inspired by
+        the <s:link-external s:target="http://www.openbsd.org/faq/pf/filter.html">OpenBSD Packet Filter</s:link-external>
+        in the
+        <s:link-external s:target="apidocs/com/io7m/jrcl/core/JRSequentialPolicy.html">JRSequentialPolicy</s:link-external>
+        class.
+      </s:paragraph>
+      <s:formal-item s:kind="example">
+        <s:formal-item-title>Sequential</s:formal-item-title>
+        <s:verbatim><![CDATA[
+import java.util.regex.Pattern;
+
+import com.io7m.jrcl.core.JRClassLoader;
+import com.io7m.jrcl.core.JRRuleConclusion;
+import com.io7m.jrcl.core.JRSequentialPolicy;
+import com.io7m.jrcl.core.JRSequentialPolicyBuilderType;
+
+public final class Sequential
+{
+  public static void main(
+    final String args[])
+    throws Exception
+  {
+    final ClassLoader cl = ClassLoader.getSystemClassLoader();
+
+    /**
+     * A policy that denies everything except <tt>java.lang.Object</tt> and
+     * <tt>java.lang.Integer</tt>.
+     */
+
+    final JRSequentialPolicyBuilderType jsb =
+      JRSequentialPolicy.newPolicyBuilder(
+        JRRuleConclusion.DENY,
+        JRRuleConclusion.DENY);
+
+    jsb.addClassRule(
+      Pattern.compile("java.lang.Object"),
+      JRRuleConclusion.ALLOW,
+      true);
+    jsb.addClassRule(
+      Pattern.compile("java.lang.Integer"),
+      JRRuleConclusion.ALLOW,
+      true);
+
+    final JRClassLoader rcl =
+      JRClassLoader.getRestrictedClassLoader(cl, jsb.build());
+
+    /**
+     * Permitted
+     */
+
+    rcl.loadClass("java.lang.Object");
+    rcl.loadClass("java.lang.Integer");
+
+    /**
+     * Not permitted
+     */
+
+    try {
+      rcl.loadClass("java.lang.Float");
+    } catch (final SecurityException e) {
+      System.err.println(e.getMessage());
+    }
+  }
+}
+]]></s:verbatim>
+      </s:formal-item>
+    </s:subsection>
+  </s:section>
+
+</s:part>
+    
